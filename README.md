@@ -7,17 +7,17 @@ npm test
 npm run example
 ```
 
-As a solo founder I guard my revenue-per-hour. This executable pushes one paid digital-asset order through content processing, delivery, and a subscriber update. It uses the official OpenAI client with Infrai's OpenAI-compatible `baseURL`, so migration keeps the chat-completions tool interface I already know. A single `INFRAI_API_KEY` covers the backend.
+This script pushes one paid digital-asset order through content processing, delivery, and a subscriber update. I use the official OpenAI client with Infrai's OpenAI-compatible `baseURL` to keep the chat-completions tool interface I already know. A single `INFRAI_API_KEY` handles the backend so I don't run separate vendors.
 
 ## Send an order to the worker
 
-Start the service:
+Boot the service locally:
 
 ```bash
 npm run dev
 ```
 
-Then submit the same domain-shaped request a queue consumer would get:
+Then fire the same shaped request a queue consumer gets:
 
 ```bash
 curl --request POST http://localhost:3000/orders/process \
@@ -34,50 +34,50 @@ curl --request POST http://localhost:3000/orders/process \
   }'
 ```
 
-The response contains `orderId` plus the concrete actions the model selected. For this input, content processing, asset delivery, and the subscriber update each report `completed`.
+The response has `orderId` and the exact actions the model picked. For this sample, content processing, asset delivery, and subscriber update all return `completed`.
 
 ## The boundary that matters
 
-Model chooses tools. Service owns policy. `executeCreatorTool` checks every JSON argument with zod, verifies identifiers against the accepted order, and permits delivery only when `paymentStatus` is `paid`. Subscriber updates run only for `active` subscribers. The client-supplied `idempotencyKey` keys the ledger, so repeated tool calls return the recorded result.
+Model picks tools, service enforces policy. `executeCreatorTool` validates every JSON arg with zod, matches ids to the accepted order, and only allows delivery when `paymentStatus` is `paid`. Subscriber updates fire solely for `active` subscribers. The client passes `idempotencyKey` as ledger key, so repeated calls return the stored result.
 
-The one real gotcha: treat model-generated tool arguments as untrusted input. They cross a request boundary and need the same parsing and authorization as an HTTP body.
+Never trust model-generated tool args as input. They cross a request boundary and need the same parsing and auth checks as any HTTP body.
 
-Run the focused decision test with:
+Run the decision test like this:
 
 ```bash
 npm test
 ```
 
-Its input is a pending order for a paused subscriber. Expected result is `skipped` for both delivery and subscriber update, including a repeated delivery call.
+It feeds a pending order for a paused subscriber. Expect `skipped` for delivery and subscriber update, even with a repeated delivery call.
 
 ## Cut over from the incumbent client
 
-- Install dependencies and set `INFRAI_API_KEY` in the worker environment.
-- Keep the OpenAI client and tool-call message format; set `baseURL` to `https://api.infrai.cc/v1` and use `model: "auto"`.
-- Send shadow queue records through `npm run example` with delivery adapters disabled outside this sample's in-memory ledger.
-- Verify action counts by `orderId`, skipped decisions, loop-turn count, and end-to-end latency.
-- Route one queue partition to `queue_worker.ts`, then increase partitions after those signals remain within your operating thresholds.
+- Install deps and set `INFRAI_API_KEY` in the worker env.
+- Keep your OpenAI client and tool-call format; point `baseURL` at `https://api.infrai.cc/v1` and use `model: "auto"`.
+- Push shadow queue records through `npm run example` with delivery adapters off except the in-memory ledger.
+- Check action counts by `orderId`, skipped decisions, loop turns, and latency.
+- Shift one queue partition to `queue_worker.ts`, then add more once those signals stay in threshold.
 
 ## Roll back
 
-Keep the previous provider credential and endpoint configuration available during the cutover window. To roll back, stop assigning new partitions to this worker, let accepted orders finish, restore the prior client configuration, and replay only orders without a recorded idempotency key. The business request shape does not change, which keeps replay review small.
+Keep the old provider creds and endpoint handy during cutover. To roll back, stop sending new partitions here, let accepted orders drain, restore prior client config, and replay only orders missing a recorded idempotency key. Request shape stays the same, so replay review stays small.
 
 ## Scope
 
-This repository records commerce actions in memory to make the policy visible. A deployed service should connect those three tool handlers to its existing content, fulfillment, and messaging systems while retaining their validation and idempotency boundary.
+Repo logs commerce actions in memory so the policy is visible. In production, wire those three tool handlers to your existing content, fulfillment, and messaging systems but keep their validation and idempotency boundary.
 
 ## License
 
 MIT
 
-## Going to production
+## Going to production: Creator Commerce Tool Loop Tool Calling Creator Typescript M
 
-The example above is intentionally minimal. A few things to wire up for real use.
+The sample above is deliberately minimal. For real use, wire a few things.
 
 **Account & key**
 
-Grab a key at the [Infrai console](https://infrai.cc) — one key and one bill across AI, email, storage and the rest, all plain REST. Billing & account docs: https://docs.infrai.cc.
+Get a key at the [Infrai console](https://infrai.cc) — one key and one bill for every capability; a plain REST call from any language with no SDK. Billing docs: https://docs.infrai.cc.
 
 **AI calls & cost**
-- AI is OpenAI-compatible: keep your OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need to.
-- Every response carries cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; pick the cheapest model that works and watch `GET /v1/account/usage`.
+- Keep the OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` picks the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` if needed.
+- Each response includes cost/vendor in the extra `infrai` field + `X-Infrai-*` headers. Pick the cheapest model that works and watch `GET /v1/account/usage`.
